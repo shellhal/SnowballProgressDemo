@@ -34,11 +34,11 @@
 //int numParticles = 20;
 
 int dimensions = 10; //diameter of particle sphere
-bool testNoise = false; //whether you want messy snowballs or not
+bool testNoise = true; //whether you want messy snowballs or not
 float rate = 5.; //what you divide by to slow down initial velocities
 bool direct_collision = false; //whether you want snowballs to hit fly 
 							   //directly at each other or your own choice of speeds
-
+int count = 0;
 
 #define ESCAPE		0x1b
 #define MS_IN_THE_ANIMATION_CYCLE	10000
@@ -105,7 +105,8 @@ void initParticles();
 void initVelocities();
 void updateAll();
 void initScene();
-float dist(particle a, particle b);
+bool dist(particle a, particle b);
+//float dist(particle a, particle b);
 
 /****************************************
 * Function Name: Main
@@ -151,6 +152,20 @@ void velocity_after_collision_calculate(particle* a, particle *b){
 	b->velocity[2] = v1[2]*(2.*m1/(m1+m2))+ v2[2]*((m2- m1)/(m1+m2));
 }
 
+
+/****************************************
+* Function Name: dist
+* Description: distance between two particles, including radius 
+*****************************************/
+bool dist(particle a, particle b){
+	//return pow( (pow((a.x - b.x), 2) + pow((a.y - b.y), 2) + pow((a.z -b.z), 2)), 0.5);
+	if(a.x - b.x <= .05 && a.x - b.x > -.5)
+		if(a.y - b.y <= .1 && a.y - b.y > -.5)
+			if(a.z - b.z <= .1 && a.z - b.z > -.5)
+				return true;
+	return false;
+}
+
 /****************************************
 * Function Name: checkCollisions
 * Description: 
@@ -159,36 +174,23 @@ void checkCollisions(){
 	//compare every particle to every other particle
 	for(int i = 0; i < particles.size(); i++){
 		for(int j = i; j < particlesB.size(); j++){
-			if(dist(particles[i], particlesB[j]) <= 0.05){
+			if(dist(particles[i], particlesB[j])) {//<= (particles[i].radius + particlesB[j].radius)+.1){
 					
-				//velocity_after_collision_calculate(&particles[i], &particlesB[j]);
+				velocity_after_collision_calculate(&particles[i], &particlesB[j]);
+				count++;
+				//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
 
-				fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
-
-				particles[i].velocity[0] = -1*particles[i].velocity[0];
-				particles[i].velocity[1] = -1*particles[i].velocity[1];
-				particles[i].velocity[2] = -1*particles[i].velocity[2];
-
-				particlesB[j].velocity[0] = -1*particlesB[j].velocity[0];
-				particlesB[j].velocity[1] = -1*particlesB[j].velocity[1];
-				particlesB[j].velocity[2] = -1*particlesB[j].velocity[2];
 			}
 		}
 		for(int j = i; j < particles.size(); j++){
 			if(i!= j){
-				if(dist(particles[i], particles[j]) <= 0.05){
+				if(dist(particles[i], particles[j])){// <= (particles[i].radius + particles[j].radius)+.1){
 
-					//velocity_after_collision_calculate(&particles[i], &particles[j]);
-						
-					fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
+					velocity_after_collision_calculate(&particles[i], &particles[j]);
+					count++;
+					//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
 
-					particles[i].velocity[0] = -1*particles[i].velocity[0];
-					particles[i].velocity[1] = -1*particles[i].velocity[1];
-					particles[i].velocity[2] = -1*particles[i].velocity[2];
-
-					particles[j].velocity[0] = -1*particles[j].velocity[0];
-					particles[j].velocity[1] = -1*particles[j].velocity[1];
-					particles[j].velocity[2] = -1*particles[j].velocity[2];
+					
 				}
 			}
 		}
@@ -196,22 +198,16 @@ void checkCollisions(){
 	for(int i = 0; i < particlesB.size(); i++){
 		for(int j = i; j < particlesB.size(); j++){
 			if(i!= j){
-				if(dist(particlesB[i], particlesB[j]) <= 0.05){
+				if(dist(particlesB[i], particlesB[j])){// <= (particlesB[i].radius + particlesB[j].radius)+.1){
 						
-					//velocity_after_collision_calculate(&particlesB[i], &particlesB[j]);
-					fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
-
-					particlesB[i].velocity[0] = -1*particlesB[i].velocity[0];
-					particlesB[i].velocity[1] = -1*particlesB[i].velocity[1];
-					particlesB[i].velocity[2] = -1*particlesB[i].velocity[2];
-
-					particlesB[j].velocity[0] = -1*particlesB[j].velocity[0];
-					particlesB[j].velocity[1] = -1*particlesB[j].velocity[1];
-					particlesB[j].velocity[2] = -1*particlesB[j].velocity[2];
+					velocity_after_collision_calculate(&particlesB[i], &particlesB[j]);
+					//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
+					count++;
 				}
 			}
 		}
 	}
+	//fprintf(stderr, "Count is: %d\t\t", count);
 }
 
 
@@ -362,14 +358,6 @@ void initVelocities(){
 }
 
 
-/****************************************
-* Function Name: dist
-* Description: distance between two particles, including radius 
-*****************************************/
-float dist(particle a, particle b){
-	float distance = pow( (pow(a.x, 2) + pow(a.y, 2) + pow(a.z, 2)), 0.5);
-	return (distance - a.radius - b.radius);
-}
 
 
 /****************************************
