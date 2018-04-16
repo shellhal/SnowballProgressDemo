@@ -11,7 +11,7 @@ struct info{
 class particle{
 public:
 	float x, y, z;
-	int velocity[3];
+	float velocity[3];
 	bool outermost;
 	float binding_coefficient;
 	float radius;
