@@ -1,5 +1,5 @@
 /********************************************************************
-* Program Name: Particle Sphere Example All Together
+* Program Name: Particle Sphere Examples
 * Author: Lily Shellhammer
 * Date: Jan 2nd, 2018
 * Description: 
@@ -34,8 +34,20 @@
 //int numParticles = 20;
 
 int dimensions = 10; //diameter of particle sphere
-bool testNoise = true; //whether you want messy snowballs or not
+bool testNoise = false; //whether you want messy snowballs or not
 float rate = 5.; //what you divide by to slow down initial velocities
+bool direct_collision = false; //whether you want snowballs to hit fly 
+							   //directly at each other or your own choice of speeds
+int count = 0;
+float kElastic = 0;
+float kDampening = 0;
+float radius = 1.;
+float mass = 1.;
+
+bool inelastic = false;
+float inelasticPercent = .58;
+bool fakeInelastic = true;//true;
+
 
 #define ESCAPE		0x1b
 #define MS_IN_THE_ANIMATION_CYCLE	10000
@@ -43,7 +55,7 @@ const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
 const int INIT_WINDOW_SIZE = { 600 };
 const float MINSCALE = { 0.05f };
 
-
+const float GRAVITY = -9.81;
 
 // what the glui package defines as true and false:
 const int GLUITRUE  = { true  };
@@ -102,7 +114,10 @@ void initParticles();
 void initVelocities();
 void updateAll();
 void initScene();
-float dist(particle a, particle b);
+bool dist(particle a, particle b);
+void initColors();
+void color(particle* a, particle *b);
+//float dist(particle a, particle b);
 
 /****************************************
 * Function Name: Main
@@ -115,6 +130,7 @@ int main( int argc, char *argv[ ] )
 	//create all the points
 	initScene();
 	initParticles();
+	initColors();
 	//set all values to beginning
 	Reset();
 
@@ -124,6 +140,121 @@ int main( int argc, char *argv[ ] )
 	return 0;
 }
 
+float quadratic(int v1i, int v2i){
+	float a = (-2.*(v1i - v2i) + sqrt(pow((2.*v1i - 2.*v2i),2) - 8.*v1i*v2i))/2.;
+	float b = (-2.*(v1i - v2i) - sqrt(pow((2.*v1i - 2.*v2i),2) - 8.*v1i*v2i))/2.;
+	fprintf(stderr, "A is: %d\tB is: %d\n", a, b);
+	return a;
+}
+
+float otherhalf(int v1i, int v2i, int a){
+	return (v1i + v2i - a);
+}
+/****************************************
+* Function Name: Velocity after collision
+* Description: calculates velocity after elastic or inelastic collision
+*****************************************/
+void velocity_after_collision_calculate(particle* a, particle *b){
+	float m1 = mass;
+	float m2 = mass;
+	float v1[3];
+	float v2[3];
+	float v1Holder[3];
+	float v2Holder[3];
+	v1[0] = a->velocity[0];
+	v1[1] = a->velocity[1];
+	v1[2] = a->velocity[2];
+	v1Holder[0] = a->velocity[0];
+	v1Holder[1] = a->velocity[1];
+	v1Holder[2] = a->velocity[2];
+
+	v2[0] = b->velocity[0];
+	v2[1] = b->velocity[1];
+	v2[2] = b->velocity[2];
+	v2Holder[0] = b->velocity[0];
+	v2Holder[1] = b->velocity[1];
+	v2Holder[2] = b->velocity[2];
+
+	if(inelastic){
+		v1Holder[0] = v1[0]* ((m1-m2)/(m1+m2)) + v2[0]*((2.*m2)/m1+m2);
+		v2Holder[0] = v1[0]*(2.*m1/(m1+m2))+ v2[0]*((m2- m1)/(m1+m2));
+
+		v1Holder[1] = v1[1]* ((m1-m2)/(m1+m2)) + v2[1]*((2.*m2)/m1+m2);
+		v2Holder[1] = v1[1]*(2.*m1/(m1+m2))+ v2[1]*((m2- m1)/(m1+m2));
+
+		v1Holder[2] = v1[2]* ((m1-m2)/(m1+m2)) + v2[2]*((2.*m2)/m1+m2);
+		v2Holder[2] = v1[2]*(2.*m1/(m1+m2))+ v2[2]*((m2- m1)/(m1+m2));
+
+
+		b->velocity[0] = quadratic(v1Holder[0], v2Holder[0]);
+		a->velocity[0] = otherhalf(v1Holder[0], v2Holder[0], b->velocity[0]);
+
+		b->velocity[1] = quadratic(v1Holder[1], v2Holder[1]);
+		a->velocity[1] = otherhalf(v1Holder[1], v2Holder[1], b->velocity[1]);
+
+		b->velocity[2] = quadratic(v1Holder[2], v2Holder[2]);
+		a->velocity[2] = otherhalf(v1Holder[2], v2Holder[2], b->velocity[2]);
+		
+		// a->velocity[1] = -1*sqrt(2*pow(v2Holder[1],2) - (2*pow(v2Holder[1],2)*inelasticPercent));
+		// b->velocity[1] = sqrt(2*pow(v2Holder[1],2) - (2*pow(v2Holder[1],2)*inelasticPercent));
+		
+
+		// a->velocity[2] = sqrt(2*pow(v2Holder[2],2) - (2*pow(v2Holder[2],2)*inelasticPercent));
+		// b->velocity[2] = sqrt(2*pow(v2Holder[2],2) - (2*pow(v2Holder[2],2)*inelasticPercent));
+	}
+	else if(fakeInelastic){
+		a->velocity[0] = (v1[0]* ((m1-m2)/(m1+m2)) + v2[0]*((2.*m2)/m1+m2)) * inelasticPercent;
+		b->velocity[0] = (v1[0]*(2.*m1/(m1+m2))+ v2[0]*((m2- m1)/(m1+m2))) * inelasticPercent;
+
+		a->velocity[1] = (v1[1]* ((m1-m2)/(m1+m2)) + v2[1]*((2.*m2)/m1+m2)) * inelasticPercent;
+		b->velocity[1] = (v1[1]*(2.*m1/(m1+m2))+ v2[1]*((m2- m1)/(m1+m2))) * inelasticPercent;
+
+		a->velocity[2] = (v1[2]* ((m1-m2)/(m1+m2)) + v2[2]*((2.*m2)/m1+m2)) * inelasticPercent;
+		b->velocity[2] = (v1[2]*(2.*m1/(m1+m2))+ v2[2]*((m2- m1)/(m1+m2)))* inelasticPercent;
+	}
+	else{
+		a->velocity[0] = (v1[0]* ((m1-m2)/(m1+m2)) + v2[0]*((2.*m2)/m1+m2));
+		b->velocity[0] = (v1[0]*(2.*m1/(m1+m2))+ v2[0]*((m2- m1)/(m1+m2)));
+
+		a->velocity[1] = (v1[1]* ((m1-m2)/(m1+m2)) + v2[1]*((2.*m2)/m1+m2));
+		b->velocity[1] = (v1[1]*(2.*m1/(m1+m2))+ v2[1]*((m2- m1)/(m1+m2)));
+
+		a->velocity[2] = (v1[2]* ((m1-m2)/(m1+m2)) + v2[2]*((2.*m2)/m1+m2));
+		b->velocity[2] = (v1[2]*(2.*m1/(m1+m2))+ v2[2]*((m2- m1)/(m1+m2)));
+	}
+}
+
+
+/****************************************
+* Function Name: dist
+* Description: distance between two particles, including radius 
+*****************************************/
+bool dist(particle a, particle b){
+	//return pow( (pow((a.x - b.x), 2) + pow((a.y - b.y), 2) + pow((a.z -b.z), 2)), 0.5);
+	if(a.x - b.x <= radius && a.x - b.x > -1.*radius)
+		if(a.y - b.y <= radius && a.y - b.y > -1.*radius)
+			if(a.z - b.z <= radius && a.z - b.z > -1.*radius)
+				return true;
+	return false;
+}
+
+/****************************************
+* Function Name: color
+* Description: adds color when a collision occurs
+*****************************************/
+void color(particle *a, particle *b){
+	if(a->color[1] > 0.){
+		a->color[1] -= .005;
+		if(a->color[2] > 0.)
+			a->color[2] -= .001;
+	}
+
+	if(b->color[1] > 0.){
+		b->color[1] -= .01;
+		if(b->color[2] > 0.)
+			b->color[2] -= .02;
+	}
+}
 /****************************************
 * Function Name: checkCollisions
 * Description: 
@@ -132,32 +263,25 @@ void checkCollisions(){
 	//compare every particle to every other particle
 	for(int i = 0; i < particles.size(); i++){
 		for(int j = i; j < particlesB.size(); j++){
-			if(dist(particles[i], particlesB[j]) <= .1){
+			if(dist(particles[i], particlesB[j])) {//<= (particles[i].radius + particlesB[j].radius)+.1){
 					
+				velocity_after_collision_calculate(&particles[i], &particlesB[j]);
+				color(&particles[i], &particlesB[j]);
+				count++;
 				//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
 
-				particles[i].velocity[0] = -1*particles[i].velocity[0];
-				particles[i].velocity[1] = -1*particles[i].velocity[1];
-				particles[i].velocity[2] = -1*particles[i].velocity[2];
-
-				particlesB[j].velocity[0] = -1*particlesB[j].velocity[0];
-				particlesB[j].velocity[1] = -1*particlesB[j].velocity[1];
-				particlesB[j].velocity[2] = -1*particlesB[j].velocity[2];
 			}
 		}
 		for(int j = i; j < particles.size(); j++){
 			if(i!= j){
-				if(dist(particles[i], particles[j]) <= .1){
-						
+				if(dist(particles[i], particles[j])){// <= (particles[i].radius + particles[j].radius)+.1){
+
+					velocity_after_collision_calculate(&particles[i], &particles[j]);
+					color(&particles[i], &particles[j]);
+					count++;
 					//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
 
-					particles[i].velocity[0] = -1*particles[i].velocity[0];
-					particles[i].velocity[1] = -1*particles[i].velocity[1];
-					particles[i].velocity[2] = -1*particles[i].velocity[2];
-
-					particles[j].velocity[0] = -1*particles[j].velocity[0];
-					particles[j].velocity[1] = -1*particles[j].velocity[1];
-					particles[j].velocity[2] = -1*particles[j].velocity[2];
+					
 				}
 			}
 		}
@@ -165,21 +289,17 @@ void checkCollisions(){
 	for(int i = 0; i < particlesB.size(); i++){
 		for(int j = i; j < particlesB.size(); j++){
 			if(i!= j){
-				if(dist(particlesB[i], particlesB[j]) <= .1){
+				if(dist(particlesB[i], particlesB[j])){// <= (particlesB[i].radius + particlesB[j].radius)+.1){
 						
+					velocity_after_collision_calculate(&particlesB[i], &particlesB[j]);
+					color(&particlesB[i], &particlesB[j]);
 					//fprintf( stderr, "COLLISION DETECTED between particles %d and %d\n", i, j);
-
-					particlesB[i].velocity[0] = -1*particlesB[i].velocity[0];
-					particlesB[i].velocity[1] = -1*particlesB[i].velocity[1];
-					particlesB[i].velocity[2] = -1*particlesB[i].velocity[2];
-
-					particlesB[j].velocity[0] = -1*particlesB[j].velocity[0];
-					particlesB[j].velocity[1] = -1*particlesB[j].velocity[1];
-					particlesB[j].velocity[2] = -1*particlesB[j].velocity[2];
+					count++;
 				}
 			}
 		}
 	}
+	//fprintf(stderr, "Count is: %d\t\t", count);
 }
 
 
@@ -202,25 +322,37 @@ float initDistance(int h, int w, int d, int radius){
 *****************************************/
 void initScene(){
 	/* set each snow balls color*/
-	particlesInfo.color[0] = 1.;
-	particlesInfo.color[1] = 1.;
-	particlesInfo.color[2] = 1.;
-
-	particlesBInfo.color[0] = .6;
-	particlesBInfo.color[1] = .8;
-	particlesBInfo.color[2] = 1.;
+	// particlesBInfo.color[0] = .6;
+	// particlesBInfo.color[1] = .8;
+	// particlesBInfo.color[2] = 1.;
 
 	/* set each snow balls starting point*/
-	particlesInfo.center[0] = 5.;
+	particlesInfo.center[0] = 10.;
 	particlesInfo.center[1] = 0.;
 	particlesInfo.center[2] = 0.;
 
-	particlesBInfo.center[0] = -5.;
+	particlesBInfo.center[0] = -10.;
 	particlesBInfo.center[1] = 0.;
 	particlesBInfo.center[2] = 0.;
 
 }
 
+void initColors(){
+	for(int i = 0; i < particles.size(); i++){
+		particles[i].color[0] = 1.;
+		particles[i].color[1] = 1.;
+		particles[i].color[2] = 1.;
+	}
+	// particlesInfo.color[0] = 1.;
+	// particlesInfo.color[1] = 1.;
+	// particlesInfo.color[2] = 1.;
+
+	for(int i = 0; i < particles.size(); i++){
+		particlesB[i].color[0] = 1.;
+		particlesB[i].color[1] = 1.;
+		particlesB[i].color[2] = 1.;
+	}
+}
 /****************************************
 * Function Name: initParticles
 * Description: create particles in vector 
@@ -240,7 +372,7 @@ void initParticles(){
 
 	// make iterator
 	std::vector<particle>::iterator iter;
-
+	bool outermost;
 	// for all dimensions, draw particles that lie within sphere radius
 	for(int h = 0; h < dimensions; h++){	 // iterate through height, then width, then depth
 		for(int w = 0; w < dimensions; w++){
@@ -248,21 +380,24 @@ void initParticles(){
 				if( initDistance(h, w, d, radius) <= radius){	 // if we are less than or equal to radius, we are inside circle
 					iter = particles.begin();						 // then draw a point at that h,w,d place
 					
+					//BUG!!!
+						outermost = true;
 					// if we are testing noise, add a little noise to the snowball's rigid lines
 					if(testNoise){
 						noise[0] = (rand()%2)* (-1) + (rand()%10)/10.;
 						noise[1] = (rand()%2)* (-1) + (rand()%10)/10.;
 						noise[2] = (rand()%2)* (-1) + (rand()%10)/10.;
-						particles.insert(iter, particle( (h + particlesInfo.center[0] + noise[0]), (w + particlesInfo.center[1] + noise[1]), (d + particlesInfo.center[2] + noise[2])));
+						particles.insert(iter, particle( (h + particlesInfo.center[0] + noise[0]), (w + particlesInfo.center[1] + noise[1]), (d + particlesInfo.center[2] + noise[2]), outermost));
 					}
 					else
-						particles.insert(iter, particle( (h + particlesInfo.center[0]), (w + particlesInfo.center[1]), (d + particlesInfo.center[2])));
+						particles.insert(iter, particle( (h + particlesInfo.center[0]), (w + particlesInfo.center[1]), (d + particlesInfo.center[2]), outermost));
 					
 				}
 			}
 		}
 	}
-
+	//BUG!!!
+		outermost = true;
 	// do the same for sphere B
 	for(int h = 0; h < dimensions; h++){	 // iterate through height, then width, then depth
 		for(int w = 0; w < dimensions; w++){
@@ -273,10 +408,10 @@ void initParticles(){
 						noise[0] = (rand()%2)* (-1) + (rand()%10)/10.;
 						noise[1] = (rand()%2)* (-1) + (rand()%10)/10.;
 						noise[2] = (rand()%2)* (-1) + (rand()%10)/10.;
-						particlesB.insert(iter, particle( (h + particlesBInfo.center[0] + noise[0]), (w + particlesBInfo.center[1] + noise[1]), (d + particlesBInfo.center[2] + noise[2])));
+						particlesB.insert(iter, particle( (h + particlesBInfo.center[0] + noise[0]), (w + particlesBInfo.center[1] + noise[1]), (d + particlesBInfo.center[2] + noise[2]), outermost));
 					}
 					else
-						particlesB.insert(iter, particle( (h + particlesBInfo.center[0]), (w + particlesBInfo.center[1]), (d + particlesBInfo.center[2])));
+						particlesB.insert(iter, particle( (h + particlesBInfo.center[0]), (w + particlesBInfo.center[1]), (d + particlesBInfo.center[2]), outermost));
 					
 				}
 			}
@@ -294,9 +429,16 @@ void initParticles(){
 *****************************************/
 void initVelocities(){
 	float speed[3];
-	speed[0] = particlesBInfo.center[0] - particlesInfo.center[0];
-	speed[1] = particlesBInfo.center[1] - particlesInfo.center[1];
-	speed[2] = particlesBInfo.center[2] - particlesInfo.center[2];
+	if(direct_collision){	//head directly toward one another
+		speed[0] = particlesBInfo.center[0] - particlesInfo.center[0];
+		speed[1] = particlesBInfo.center[1] - particlesInfo.center[1];
+		speed[2] = particlesBInfo.center[2] - particlesInfo.center[2];
+	}
+	else{
+		speed[0] = -1;
+		speed[1] = 1;
+		speed[2] = 0;
+	}
 
 	for(int i = 0; i < particles.size(); i++){
 		particles[i].velocity[0] = speed[0] / rate;
@@ -305,9 +447,16 @@ void initVelocities(){
 	}
 
 	float speedB[3];
-	speedB[0] = particlesInfo.center[0] - particlesBInfo.center[0];
-	speedB[1] = particlesInfo.center[1] - particlesBInfo.center[1];
-	speedB[2] = particlesInfo.center[2] - particlesBInfo.center[2];
+	if(direct_collision){
+		speedB[0] = particlesInfo.center[0] - particlesBInfo.center[0];
+		speedB[1] = particlesInfo.center[1] - particlesBInfo.center[1];
+		speedB[2] = particlesInfo.center[2] - particlesBInfo.center[2];
+	}
+	else{
+		speedB[0] = 1;
+		speedB[1] = 1;
+		speedB[2] = 0;
+	}
 	for(int i = 0; i < particles.size(); i++){
 		particlesB[i].velocity[0] = speedB[0] / rate;
 		particlesB[i].velocity[1] = speedB[1] / rate;
@@ -316,15 +465,9 @@ void initVelocities(){
 }
 
 
-/****************************************
-* Function Name: dist
-* Description: distance between two particles, including radius 
-*****************************************/
-float dist(particle a, particle b){
-	float distance = pow( (pow(a.x, 2) + pow(a.y, 2) + pow(a.z, 2)), 0.5);
-	return (distance - a.radius - b.radius);
-}
+void updateSpringForce(){
 
+}
 
 /****************************************
 * Function Name: updateAll
@@ -332,15 +475,24 @@ float dist(particle a, particle b){
 *****************************************/
 void updateAll(){
 	checkCollisions();
+	updateSpringForce();
 	for(int i = 0; i < particles.size(); i++){
-		particles[i].x += particles[i].velocity[0]*1/10.0;
-		particles[i].y += particles[i].velocity[1]*1/10.0;
-		particles[i].z += particles[i].velocity[2]*1/10.0;
+
+		//Calculate gravity
+		particles[i].velocity[1] += 1./100.0*GRAVITY;
+		//Update position
+		particles[i].x += particles[i].velocity[0]*1./10.0;
+		particles[i].y += particles[i].velocity[1]*1./10.0;
+		particles[i].z += particles[i].velocity[2]*1./10.0;
+
+
 	}
 	for(int i = 0; i < particlesB.size(); i++){
-		particlesB[i].x += particlesB[i].velocity[0]*1/10.0;
-		particlesB[i].y += particlesB[i].velocity[1]*1/10.0;
-		particlesB[i].z += particlesB[i].velocity[2]*1/10.0;
+		particlesB[i].velocity[1] += 1./100.0*GRAVITY;
+
+		particlesB[i].x += particlesB[i].velocity[0]*1./10.0;
+		particlesB[i].y += particlesB[i].velocity[1]*1./10.0;
+		particlesB[i].z += particlesB[i].velocity[2]*1./10.0;
 	}
 }
 
@@ -415,16 +567,16 @@ void Display( )
 	*/
 	for(int j = 0; j < particles.size(); j++){
 		glPushMatrix();
-		glColor3f(particlesInfo.color[0], particlesInfo.color[1], particlesInfo.color[2]);
+		glColor3f(particles[j].color[0], particles[j].color[1], particles[j].color[2]);
 		glTranslatef(particles[j].x, particles[j].y, particles[j].z);
-		glutSolidCube(0.5);
+		glutSolidCube(radius);
 		glPopMatrix();
 	}
 	for(int j = 0; j < particlesB.size(); j++){
 		glPushMatrix();
-		glColor3f(particlesBInfo.color[0], particlesBInfo.color[1], particlesBInfo.color[2]);
+		glColor3f(particlesB[j].color[0], particlesB[j].color[1], particlesB[j].color[2]);
 		glTranslatef(particlesB[j].x, particlesB[j].y, particlesB[j].z);
-		glutSolidCube(0.5);
+		glutSolidCube(radius);
 		glPopMatrix();
 	}
 
@@ -610,4 +762,5 @@ void MouseMotion( int x, int y )
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
+
 
