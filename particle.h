@@ -13,12 +13,12 @@ public:
 	float x, y, z;
 	float velocity[3];
 	bool outermost;
-	float binding_coefficient;
-	float radius;
-	float mass;	
+	int neighbors[6];
+	int neighbors_size;
+	float color[3];
 
 	particle();
-	particle(float x, float y, float z);
+	particle(float x, float y, float z, bool outermost);
 	void moveTo(float x, float y, float z);
 	void setVelocity(float xn, float yn, float zn);
 
